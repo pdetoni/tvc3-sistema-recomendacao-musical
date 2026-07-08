@@ -60,7 +60,7 @@ pip install -r requirements.txt
 
 ### 2. Configurar o Dataset
 O sistema utiliza o **Spotify Tracks Dataset** disponível no Kaggle:
-1. Baixe o dataset em: [maharshipandya/spotify-tracks-dataset](https://www.kaggle.com/datasets/maharshipandya/spotify-tracks-dataset)
+1. Baixe o dataset em: [maharshipandya/spotify-tracks-dataset](https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset)
 2. Extraia o zip e salve o arquivo como `dataset.csv` dentro da pasta `data/` do projeto (`tvc3/data/dataset.csv`).
 *(Nota: Caso a base não esteja na pasta, o app iniciará automaticamente em **Modo de Demonstração** usando dados sintéticos gerados em tempo real).*
 
