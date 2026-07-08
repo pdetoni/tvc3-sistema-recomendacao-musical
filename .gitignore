@@ -1,0 +1,23 @@
+# Dataset files (large files)
+data/dataset.csv
+data/dataset.csv.zip
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Streamlit secrets (config is fine to keep)
+.streamlit/secrets.toml
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# OS files
+.DS_Store
+Thumbs.db
