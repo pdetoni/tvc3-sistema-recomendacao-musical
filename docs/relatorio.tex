@@ -7,6 +7,22 @@
 \usepackage{booktabs}
 \usepackage{float}
 \usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{positioning,shapes.geometric,calc,fit,backgrounds}
+
+% ---- Estilos do diagrama de arquitetura (Figura 1) ----
+\tikzset{
+  sadbase/.style  ={rounded corners=3pt, draw, align=center, inner sep=5pt,
+                    font=\footnotesize, minimum height=11mm, text width=40mm},
+  sadio/.style    ={sadbase, fill=blue!8,   draw=blue!55,  line width=0.6pt},
+  sadproc/.style  ={sadbase, fill=teal!9,    draw=teal!55,  line width=0.6pt},
+  sadmodel/.style ={sadbase, fill=violet!8,  draw=violet!60,line width=0.7pt},
+  sadout/.style   ={sadbase, fill=orange!12, draw=orange!80,line width=1.0pt, minimum height=9mm},
+  sadgrp/.style   ={rounded corners=6pt, draw=black!22, dashed, inner sep=8pt},
+  sadgrplbl/.style={font=\scriptsize\bfseries\sffamily, text=black!55},
+  sadfl/.style    ={-latex, draw=black!62, line width=0.9pt},
+  sadflt/.style   ={-latex, draw=black!40, line width=0.7pt, dashed},
+}
 
 \sloppy
 
@@ -24,11 +40,11 @@
 \maketitle
 
 \begin{abstract}
-  With catalogs comprising tens of millions of tracks, music streaming platforms present a classic case of choice overload. In this context, recommendation engines act as essential Decision Support Systems (DSS). This report presents the design and implementation of a content-based music recommendation prototype using the Spotify Tracks Dataset from Kaggle. Leveraging audio signal features (e.g., danceability, energy, and acousticness), we implemented and compared two analytical approaches: Cosine Similarity of user centroids and K-Means Clustering. The prototype was developed in Python with a Streamlit interface. Evaluation was conducted through metrics of diversity (Intra-List Similarity), accuracy (Hold-out Hit Rate), catalog coverage, and cluster quality (Silhouette Score), demonstrating the feasibility of track-level content recommendation without user-item interaction data.
+  With catalogs comprising tens of millions of tracks, music streaming platforms present a classic case of choice overload. In this context, recommendation engines act as essential Decision Support Systems (DSS). This report presents the design and implementation of a content-based music recommendation prototype using the Spotify Tracks Dataset from Kaggle. Leveraging audio signal features (e.g., danceability, energy, and acousticness), we implemented and compared two analytical approaches: Cosine Similarity of user centroids and K-Means Clustering. The prototype was developed in Python with a Streamlit interface. Evaluation was conducted through metrics of diversity (Intra-List Similarity), accuracy (Genre Precision), catalog coverage, and cluster quality (Silhouette Score), demonstrating the feasibility of track-level content recommendation without user-item interaction data.
 \end{abstract}
 
 \begin{resumo}
-  Com catálogos que abrangem dezenas de milhões de faixas, as plataformas de streaming de música apresentam um caso clássico de sobrecarga de escolhas. Nesse contexto, os motores de recomendação atuam como Sistemas de Apoio à Decisão (SAD) indispensáveis. Este relatório apresenta o desenvolvimento de um protótipo de recomendação musical baseado em conteúdo utilizando o Spotify Tracks Dataset do Kaggle. Aproveitando características físicas de áudio (como dançabilidade, energia e acústica), implementamos e comparamos duas abordagens analíticas: Similaridade do Cosseno do centróide do usuário e Agrupamento via K-Means. O protótipo foi desenvolvido em Python com interface Streamlit. A avaliação foi conduzida por meio de métricas de diversidade (Intra-List Similarity), acurácia (Hold-out Hit Rate), cobertura de catálogo e qualidade dos clusters (Silhouette Score), demonstrando a viabilidade de recomendação baseada em conteúdo sem histórico de interações.
+  Com catálogos que abrangem dezenas de milhões de faixas, as plataformas de streaming de música apresentam um caso clássico de sobrecarga de escolhas. Nesse contexto, os motores de recomendação atuam como Sistemas de Apoio à Decisão (SAD) indispensáveis. Este relatório apresenta o desenvolvimento de um protótipo de recomendação musical baseado em conteúdo utilizando o Spotify Tracks Dataset do Kaggle. Aproveitando características físicas de áudio (como dançabilidade, energia e acústica), implementamos e comparamos duas abordagens analíticas: Similaridade do Cosseno do centróide do usuário e Agrupamento via K-Means. O protótipo foi desenvolvido em Python com interface Streamlit. A avaliação foi conduzida por meio de métricas de diversidade (Intra-List Similarity), acurácia (Precisão de Gênero), cobertura de catálogo e qualidade dos clusters (Silhouette Score), demonstrando a viabilidade de recomendação baseada em conteúdo sem histórico de interações.
 \end{resumo}
 
 \section{Introdução}
@@ -71,6 +87,8 @@ A etapa de higienização de dados consistiu em:
     \item Limpeza do separador padrão de múltiplos artistas (\texttt{;;}) para formato amigável (\texttt{, }).
 \end{itemize}
 
+Como o dataset original contém a mesma faixa replicada em múltiplos gêneros, a deduplicação por \texttt{track\_id} reduziu a base de 114.000 para 89.740 faixas únicas, distribuídas em 113 gêneros efetivamente presentes. Este é o catálogo efetivo utilizado em todos os experimentos.
+
 Após o saneamento, selecionou-se 11 características numéricas do sinal de áudio para compor o espaço de representação vetorial: \textit{danceability}, \textit{energy}, \textit{key}, \textit{loudness}, \textit{mode}, \textit{speechiness}, \textit{acousticness}, \textit{instrumentalness}, \textit{liveness}, \textit{valence} e \textit{tempo}. Como estas variáveis possuem escalas muito distintas (ex: o volume varia em decibéis negativos de $-60$ a $0$, enquanto a acústica varia de $0.0$ a $1.0$), aplicou-se a normalização z-score através do \texttt{StandardScaler} da biblioteca Scikit-Learn \cite{scikit-learn}, garantindo peso equivalente para todas as características no cálculo de distância euclidiana e cosseno.
 
 \subsection{Arquitetura e Fluxo do SAD}
@@ -78,7 +96,43 @@ O sistema foi desenvolvido utilizando a linguagem Python, Scikit-Learn (para mod
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.85\textwidth]{../imagens/fluxo_sistema.png}
+\resizebox{0.62\textwidth}{!}{%
+\begin{tikzpicture}
+% ENTRADA
+\node[sadio] (cat)  at (-3.3, 0)   {\textbf{Catálogo Spotify}\\114.000 faixas brutas (Kaggle, CC0)};
+\node[sadio] (seed) at ( 3.3, 0)   {\textbf{Faixas-semente}\\1--5 faixas escolhidas pelo usuário};
+% DADOS
+\node[sadproc] (prep) at (-3.3,-3.4) {\textbf{Pré-processamento}\\Dedup.\ por \texttt{track\_id} $\rightarrow$ 89.740 faixas; z-score (11 \textit{features})};
+\node[sadproc] (prof) at ( 0.0,-6.6) {\textbf{Perfil do usuário}\\Centróide $\vec{u}$ = média das faixas-semente normalizadas};
+% MOTOR
+\node[sadmodel] (cos) at (-3.3,-9.9) {\textbf{Similaridade do Cosseno}\\$\mathrm{sim}(\vec u,\vec v)$ do perfil contra \emph{todo} o catálogo};
+\node[sadmodel] (km)  at ( 3.3,-9.9) {\textbf{K-Means} (pré-filtro)\\Cluster majoritário das sementes; cosseno só no cluster};
+% SAÍDA
+\node[sadproc]  (filt) at (0.0,-13.2) {\textbf{Filtros}\\Exclui as sementes $\cdot$ restrição de gênero (opcional)};
+\node[sadout]   (top)  at (0.0,-15.4) {\textbf{Top-N recomendações}};
+% SETAS
+\draw[sadfl] (cat)  -- (prep);
+\draw[sadfl] (seed) -- (prof);
+\draw[sadfl] (prep) -- (prof);
+\draw[sadfl] (prof) -- (cos);
+\draw[sadfl] (prof) -- (km);
+\draw[sadfl] (cos)  -- (filt);
+\draw[sadfl] (km)   -- (filt);
+\draw[sadfl] (filt) -- (top);
+% catálogo normalizado alimenta o motor como pool de candidatos
+\draw[sadflt] (prep.west) -- ++(-1.1,0) coordinate (p1)
+      (p1) |- (cos.west);
+\node[font=\scriptsize\itshape, text=black!45, rotate=90, anchor=south]
+      at ($(p1)+(-0.15,-3.1)$) {catálogo normalizado (candidatos)};
+% RÓTULOS DE ESTÁGIO
+\begin{scope}[on background layer]
+  \node[sadgrp, fit=(cat)(seed),  label={[sadgrplbl]right:ENTRADA}] {};
+  \node[sadgrp, fit=(prep)(prof), label={[sadgrplbl]right:DADOS}] {};
+  \node[sadgrp, fit=(cos)(km),    label={[sadgrplbl]right:MOTOR}] {};
+  \node[sadgrp, fit=(filt)(top),  label={[sadgrplbl]right:SAÍDA}] {};
+\end{scope}
+\end{tikzpicture}%
+}
 \caption{Fluxo de Processamento e Arquitetura do SAD Musical}
 \label{fig:fluxo_sistema}
 \end{figure}
@@ -95,7 +149,37 @@ O fluxo operacional do decisor na plataforma compreende:
     \item \textbf{Filtros e Saída:} Aplica exclusão das sementes, restrições opcionais de gênero (via interface) e retorna a lista ordenada com as Top-N músicas recomendadas.
 \end{enumerate}
 
+\subsection{Configuração Experimental e Reprodutibilidade}
+Todos os experimentos relatados na Seção~\ref{sec:resultados} são \textbf{integralmente reprodutíveis}. Fixou-se a semente aleatória global em $42$ para todas as etapas estocásticas: o \texttt{StandardScaler} é determinístico; o K-Means foi instanciado com \texttt{random\_state=42} e \texttt{n\_init=10}; e o sorteio de faixas-semente e de consultas aleatórias nos experimentos é realizado por instâncias locais de \texttt{numpy.random.RandomState(42)}. Dessa forma, execuções repetidas produzem exatamente os mesmos números. A Tabela~\ref{tab:hiperparametros} consolida os hiperparâmetros e o ambiente de software utilizados.
+
+\begin{table}[H]
+\centering
+\caption{Configuração experimental e ambiente de reprodução}
+\label{tab:hiperparametros}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parâmetro / Componente} & \textbf{Valor} \\
+\midrule
+Semente aleatória (\textit{seed}) & 42 \\
+Características de áudio & 11 (normalizadas via z-score) \\
+Faixas do catálogo (pós-limpeza) & 89.740 \\
+$K$ (K-Means, experimentos comparativos) & 10 \\
+Precisão de Gênero & 3 sementes, Top-10, 20 repetições \\
+Cobertura / ILS & 40 consultas, Top-10 \\
+Amostra da silhueta & 2.000 faixas \\
+\midrule
+Python & 3.12 \\
+scikit-learn & 1.9 \\
+pandas / NumPy & 2.2 \\
+Streamlit / Plotly & 1.59 / 6.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Para regenerar todas as tabelas desta seção a partir da base bruta, basta posicionar o arquivo \texttt{data/dataset.csv} (obtido no Kaggle \cite{spotify_dataset}) e executar, na raiz do projeto, o comando único \texttt{python reproduzir\_experimentos.py}. O script carrega os dados, treina os modelos e imprime, de forma determinística, os valores reportados a seguir.
+
 \section{Resultados e Discussões}
+\label{sec:resultados}
 \subsection{Visualização e Interface Streamlit}
 A interface gráfica de negócios foi desenhada em páginas estruturadas (\textit{multipage app}) com tema escuro e elementos visuais de alto impacto baseados na biblioteca Plotly, compreendendo três módulos principais:
 \begin{enumerate}
@@ -105,31 +189,32 @@ A interface gráfica de negócios foi desenhada em páginas estruturadas (\texti
 \end{enumerate}
 
 \subsection{Resultados das Métricas de SAD}
-A validação quantitativa da modelagem analítica do SAD musical foi executada por meio de simulações estatísticas no módulo de avaliação:
+A validação quantitativa da modelagem analítica do SAD musical foi executada por meio de simulações estatísticas determinísticas (\textit{seed}~$=42$) no módulo de avaliação, todas reprodutíveis via \texttt{reproduzir\_experimentos.py}.
 
-\subsubsection{Avaliação de Acurácia via Hold-out (Hit Rate)}
-O experimento de hold-out ocultou 4 músicas pertencentes ao gênero \textit{``rock''} e usou outras 3 músicas do mesmo estilo como semente. O algoritmo gerou 20 recomendações abertas. A Tabela~\ref{tab:holdout} resume a taxa de acerto (resgate de faixas ocultas) obtida pelos algoritmos.
+\subsubsection{Acurácia por Precisão de Gênero (Genre Precision@10)}
+Como a base não contém histórico de interações usuário-item, adotou-se a \textit{Precisão de Gênero} como proxy de acurácia. A partir de 3 faixas-semente de um único gênero, gera-se a recomendação aberta (Top-10 sobre todo o catálogo) e mede-se a fração média --- sobre 20 repetições --- das recomendações pertencentes ao mesmo gênero da semente. A referência é o \textit{baseline} aleatório de $1/113 = 0,88\%$. A Tabela~\ref{tab:genreprec} apresenta os resultados; os valores são idênticos para Cosseno e K-Means, reforçando a equivalência entre os métodos discutida adiante.
 
 \begin{table}[H]
 \centering
-\caption{Métricas de Acerto (Hit Rate@20) no Teste de Hold-out}
-\label{tab:holdout}
+\caption{Precisão de Gênero@10 por gênero (recomendação aberta, 3 sementes, 20 repetições)}
+\label{tab:genreprec}
 \begin{tabular}{lrr}
 \toprule
-\textbf{Métrica de Avaliação} & \textbf{Similaridade do Cosseno} & \textbf{K-Means Clustering} \\
+\textbf{Gênero avaliado} & \textbf{Precisão@10} & \textbf{Ganho vs.\ acaso} \\
 \midrule
-Quantidade de Sementes & 3 & 3 \\
-Músicas Ocultas (Hold-out) & 4 & 4 \\
-Músicas Resgatadas (Hits) & 3 & 1 \\
-\textbf{Hit Rate (\%)} & \textbf{75,0\%} & \textbf{25,0\%} \\
+Clássica & 25,0\% & 28,2$\times$ \\
+Rock     & 9,0\%  & 10,2$\times$ \\
+Pop      & 5,5\%  & 6,2$\times$ \\
+Metal    & 1,5\%  & 1,7$\times$ \\
+Jazz     & 0,5\%  & 0,6$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-A similaridade do cosseno apresentou melhor desempenho no resgate direto de músicas ocultas (75\% vs 25\% do K-Means). Isso ocorre porque o K-Means restringe a busca às fronteiras rígidas de partição geométrica do cluster treinado, podendo excluir faixas estilisticamente próximas mas atribuídas a clusters adjacentes.
+Os resultados revelam um comportamento fortemente dependente do gênero. Para estilos acusticamente distintivos, como a música clássica, a precisão atinge $25\%$ --- cerca de $28\times$ acima do acaso ---, evidenciando que o espaço de características de áudio carrega sinal de gênero relevante. Contudo, para gêneros situados no ``meio do espectro'' sonoro, como metal e jazz, a precisão cai ao nível do acaso, indicando forte sobreposição acústica com gêneros vizinhos. Este achado é uma evidência direta de que os 113 gêneros finos do dataset \textbf{não são linearmente separáveis} apenas por atributos de áudio, corroborando quantitativamente os valores modestos de silhueta (Seção~4.2.3). Vale ressaltar que o sistema não tem por objetivo reconstruir rótulos de gênero: as recomendações geradas exibem similaridade do cosseno tipicamente superior a $0,90$ em relação ao perfil-semente, evidenciando alta \textit{coesão acústica}, que é a real proposta de valor da filtragem por conteúdo.
 
 \subsubsection{Diversidade (ILS) e Cobertura do Catálogo (Coverage)}
-Para avaliar o comportamento global dos algoritmos sob 40 consultas aleatórias gerando 10 recomendações cada, computou-se a diversidade (ILS) e a cobertura geral do catálogo de faixas (Tabela~\ref{tab:ils_cov}).
+Sob 40 consultas aleatórias gerando 10 recomendações cada, computaram-se a similaridade intra-lista (ILS) e a cobertura de catálogo (Tabela~\ref{tab:ils_cov}).
 
 \begin{table}[H]
 \centering
@@ -137,25 +222,57 @@ Para avaliar o comportamento global dos algoritmos sob 40 consultas aleatórias 
 \label{tab:ils_cov}
 \begin{tabular}{lrr}
 \toprule
-\textbf{Algoritmo Avaliado} & \textbf{Média ILS (Diversidade)} & \textbf{Cobertura Global} \\
+\textbf{Algoritmo Avaliado} & \textbf{Média ILS} & \textbf{Cobertura Global} \\
 \midrule
-Similaridade do Cosseno & 0,724 & 0,351\% (400 faixas únicas) \\
-K-Means Clustering (K=10) & 0,845 & 0,087\% (100 faixas únicas) \\
+Similaridade do Cosseno & 0,905 & 0,446\% (400 faixas únicas) \\
+K-Means Clustering (K=10) & 0,903 & 0,446\% (400 faixas únicas) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-A diversidade medida pelo ILS indica que a similaridade do cosseno produz listas de recomendações mais diversas entre si (menor ILS, 0,724) comparado ao K-Means (0,845). Além disso, a cobertura de catálogo do cosseno foi significativamente superior, sugerindo uma distribuição de cauda longa mais saudável nas recomendações.
+O resultado mais relevante é a \textbf{equivalência prática entre os dois algoritmos} nesta escala (ILS $\approx 0,90$ e cobertura idêntica). Isso ocorre porque, com sementes distribuídas por todo o catálogo, o cluster majoritário identificado pelo K-Means é tipicamente muito grande (dezenas de milhares de faixas); ao reordenar seus candidatos pela mesma similaridade do cosseno, o K-Means acaba reproduzindo, na prática, o comportamento da busca aberta. O ILS elevado ($0,90$) indica listas internamente coesas (baixa diversidade), coerente com o objetivo de conteúdo. A cobertura baixa em 40 consultas não denota efeito-bolha, mas sim subamostragem: como mostra a Tabela~\ref{tab:coverage_sweep}, a cobertura cresce de forma praticamente linear com o número de consultas, sem saturar, o que confirma uma distribuição de cauda longa saudável.
+
+\begin{table}[H]
+\centering
+\caption{Cobertura do catálogo em função do número de consultas (Cosseno, Top-10)}
+\label{tab:coverage_sweep}
+\begin{tabular}{rrr}
+\toprule
+\textbf{Nº de consultas} & \textbf{Cobertura} & \textbf{Faixas únicas} \\
+\midrule
+40  & 0,446\% & 400 \\
+200 & 2,187\% & 1.963 \\
+500 & 5,348\% & 4.799 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsubsection{Validação de Silhueta para Agrupamento K-Means}
-No painel de avaliação do K-Means, executou-se a métrica de Silhueta variando $K$ em uma amostra de 2.000 faixas. O valor médio de silhueta para $K=10$ estabilizou-se em $0,154$, indicando que, embora exista separação estatística viável entre os grupos extremos (ex: clássica e eletrônica), há sobreposições graduais de espectro de áudio entre gêneros vizinhos (ex: pop, rock e indie).
+Executou-se o coeficiente de silhueta variando $K$ em uma amostra de 2.000 faixas (Tabela~\ref{tab:silhueta}). O melhor valor foi obtido em $K=8$ ($0,147$), com queda gradual para $K$ maiores.
+
+\begin{table}[H]
+\centering
+\caption{Coeficiente de Silhueta em função de $K$}
+\label{tab:silhueta}
+\begin{tabular}{rrrrrrr}
+\toprule
+$K$ & 5 & 8 & 10 & 12 & 15 & 20 \\
+\midrule
+Silhueta & 0,146 & \textbf{0,147} & 0,133 & 0,129 & 0,118 & 0,119 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Os valores de silhueta, todos entre $0,12$ e $0,15$, indicam uma estrutura de agrupamento \textit{fraca porém real}: existe separação estatística entre grupos acusticamente extremos (ex.: clássica \textit{vs.} eletrônica), mas há forte sobreposição de espectro de áudio entre os 113 gêneros finos (ex.: pop, rock e indie). Esse achado é consistente com a baixa precisão de gênero observada e explica por que o pré-filtro por clusters pouco altera o resultado final em relação à busca aberta.
+
+Cabe justificar o uso de $K=10$ nos experimentos comparativos (Tabelas~\ref{tab:hiperparametros} e \ref{tab:ils_cov}) em vez do ótimo estrito de silhueta em $K=8$. A diferença de coesão entre os dois valores é desprezível ($0,147$ contra $0,133$) e ambos permanecem no mesmo patamar de estrutura fraca; além disso, como demonstrado nesta seção, o desempenho de recomendação é praticamente equivalente ao da busca aberta para qualquer $K$ nessa faixa, pois o cluster majoritário das sementes permanece amplo o bastante para não restringir efetivamente o espaço de busca. Adotou-se, portanto, $K=10$ como valor de referência convencional para o particionamento estilístico, sem prejuízo às conclusões: os resultados são estáveis em todo o intervalo $K\in[8,12]$.
 
 \section{Conclusões}
-Este trabalho concluiu com sucesso a implementação prática de um Sistema de Apoio à Decisão voltado para recomendação musical. A modelagem quantitativa empregando Similaridade do Cosseno e K-Means Clustering foi traduzida em um aplicativo Streamlit dinâmico e robusto.
+Este trabalho concluiu com sucesso a implementação prática de um Sistema de Apoio à Decisão voltado para recomendação musical. A modelagem quantitativa empregando Similaridade do Cosseno e K-Means Clustering foi traduzida em um aplicativo Streamlit dinâmico, robusto e com resultados integralmente reprodutíveis.
 
-A validação analítica evidenciou que a Similaridade do Cosseno de centróide aberto oferece uma maior cobertura de catálogo (0,351\%) e maior diversidade nas indicações, além de melhor taxa de acerto no experimento de hold-out (75,0\%). O K-Means, por sua vez, atua de forma satisfatória quando o objetivo gerencial de suporte à decisão é impor barreiras rígidas de restrição estilística sonora aos agrupamentos de músicas.
+A validação analítica, conduzida sobre as 89.740 faixas do catálogo real, evidenciou três achados principais. Primeiro, o sistema recupera de forma confiável faixas acusticamente semelhantes ao perfil-semente (similaridade do cosseno tipicamente acima de $0,90$), cumprindo seu objetivo de filtragem por conteúdo. Segundo, na escala do catálogo completo, a Similaridade do Cosseno e o K-Means apresentam desempenho \textit{praticamente equivalente} (ILS $\approx 0,90$ e cobertura idêntica), pois o cluster majoritário das sementes é amplo o suficiente para que o pré-filtro do K-Means pouco restrinja o espaço de busca. Terceiro, a análise de silhueta (ótimo em $K=8$, com valores entre $0,12$ e $0,15$) e a precisão de gênero fortemente dependente do estilo (de $28\times$ o acaso na clássica ao nível do acaso em metal e jazz) revelam que as características de áudio, embora coerentes, não separam de maneira nítida os 113 gêneros finos do dataset.
 
-Como limitações da modelagem baseada em conteúdo, aponta-se a impossibilidade de recomendar novidades com assinaturas acústicas radicalmente distintas das sementes (o efeito de bolha sonora). Trabalhos futuros podem investigar abordagens híbridas, combinando características de áudio a redes de co-ocorrência de artistas ou dados simulados de comportamento do usuário.
+Como limitações, além do conhecido efeito de bolha sonora inerente à filtragem por conteúdo, aponta-se a forte sobreposição acústica entre gêneros musicais vizinhos, que limita a precisão de gênero para estilos não distintivos. Trabalhos futuros podem investigar abordagens híbridas — combinando características de áudio a redes de co-ocorrência de artistas ou a dados de comportamento do usuário — e o agrupamento dos gêneros finos em macro-gêneros para avaliação de acurácia, além de validação por juízes humanos.
 
 \bibliographystyle{sbc}
 \bibliography{sbc-template}
