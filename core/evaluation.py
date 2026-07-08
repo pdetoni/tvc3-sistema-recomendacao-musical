@@ -79,6 +79,49 @@ def evaluate_holdout_hit_rate(df, df_scaled, audio_features, recommender_func, g
         "hits_names": list(df[df["track_id"].isin(list(set(holdout_ids).intersection(set(rec_ids))))]["track_name"].values)
     }
 
+def evaluate_genre_precision(df, df_scaled, audio_features, recommender_func,
+                             genre, seeds_count=3, top_n=10, repetitions=20, **kwargs):
+    """
+    Precisão de Gênero@N (proxy de acurácia, sem histórico de interações).
+
+    A partir de `seeds_count` faixas-semente de um único gênero, gera a
+    recomendação ABERTA (Top-N sobre todo o catálogo, sem filtro de gênero) e
+    mede a fração das recomendações que pertencem ao mesmo gênero da semente.
+    O valor final é a média dessa fração ao longo de `repetitions` execuções.
+    A referência (acaso) é 1/(nº de gêneros do catálogo).
+    """
+    genre_tracks = df[df["track_genre"] == genre]["track_id"].values
+    if len(genre_tracks) < seeds_count + 1:
+        return {"precision": 0.0, "reps": 0, "gain": 0.0, "baseline": 0.0,
+                "error": f"Faixas insuficientes no gênero {genre} para o teste."}
+
+    precisions = []
+    for _ in range(repetitions):
+        seed_ids = list(np.random.choice(genre_tracks, size=seeds_count, replace=False))
+        recs = recommender_func(
+            seed_ids=seed_ids,
+            df=df,
+            df_scaled=df_scaled,
+            audio_features=audio_features,
+            top_n=top_n,
+            same_genre_only=False,
+            **kwargs
+        )
+        if recs.empty:
+            continue
+        precisions.append(float((recs["track_genre"] == genre).mean()))
+
+    mean_p = float(np.mean(precisions)) if precisions else 0.0
+    n_genres = int(df["track_genre"].nunique())
+    baseline = 1.0 / n_genres if n_genres else 0.0
+    return {
+        "precision": mean_p,
+        "reps": len(precisions),
+        "baseline": baseline,
+        "gain": (mean_p / baseline) if baseline else 0.0,
+        "n_genres": n_genres,
+    }
+
 def calculate_catalog_coverage(df, df_scaled, audio_features, recommender_func, n_tests=50, top_n=10, **kwargs):
     """
     Calculates Catalog Coverage.

@@ -7,7 +7,7 @@ from core.data_loader import load_and_preprocess_data
 from core.recommender import recommend_cosine, recommend_kmeans, train_kmeans
 from core.evaluation import (
     calculate_ils,
-    evaluate_holdout_hit_rate,
+    evaluate_genre_precision,
     calculate_catalog_coverage,
     calculate_kmeans_metrics
 )
@@ -68,23 +68,24 @@ Sistemas de Apoio à Decisão (SAD) baseados em recomendação precisam ser aval
 Nesta página, você pode executar simulações e experimentos analíticos para medir a qualidade, diversidade e cobertura das recomendações.
 """)
 
-tab_holdout, tab_coverage, tab_kmeans = st.tabs([
-    "🎯 Experimento de Hold-Out (Hit Rate)",
+tab_precision, tab_coverage, tab_kmeans = st.tabs([
+    "🎯 Precisão de Gênero (Genre Precision@10)",
     "🌐 Cobertura do Catálogo (Coverage)",
     "🧼 Avaliação dos Clusters (K-Means)"
 ])
 
-# ----------------- TAB 1: HOLDOUT EXPERIMENT -----------------
-with tab_holdout:
-    st.markdown("### Experimento de Hold-out (Lista Oculta)")
+# ----------------- TAB 1: GENRE PRECISION -----------------
+with tab_precision:
+    st.markdown("### Precisão de Gênero (Genre Precision@N)")
     st.write("""
-    **Como funciona:**
-    1. Escolhemos um gênero musical específico e selecionamos um grupo de músicas deste gênero.
-    2. Escondemos uma parte delas (**Hold-out**) e usamos as outras como sementes (**Seeds**).
-    3. Geramos recomendações com o algoritmo.
-    4. Medimos a **Métrica de Acerto (Hit Rate)**: o percentual de músicas do Hold-out que o algoritmo conseguiu resgatar nas principais recomendações.
+    **Como funciona:** como a base é de nível de faixa (sem histórico de interações usuário-item),
+    adotamos a **Precisão de Gênero** como *proxy* de acurácia.
+    1. Selecionamos aleatoriamente algumas faixas-semente de **um único gênero**.
+    2. Geramos a recomendação **aberta** (Top-N sobre todo o catálogo, sem filtro de gênero).
+    3. Medimos a **fração** das recomendações que pertencem ao mesmo gênero da semente.
+    4. Repetimos várias vezes e tiramos a **média**, comparando com o acaso (1/nº de gêneros).
     """)
-    
+
     col_ctrl1, col_ctrl2 = st.columns(2)
     with col_ctrl1:
         eval_genre = st.selectbox(
@@ -92,85 +93,69 @@ with tab_holdout:
             sorted(df["track_genre"].unique()),
             index=0
         )
-        top_k = st.slider("Top-K recomendações a gerar:", 10, 50, 20, step=5)
-        
+        top_k = st.slider("Top-N recomendações a gerar:", 5, 30, 10, step=5)
+
     with col_ctrl2:
         seeds_cnt = st.slider("Quantidade de Sementes:", 1, 5, 3)
-        holdout_cnt = st.slider("Quantidade de Músicas Ocultas (Hold-out):", 2, 8, 4)
-        
-    if st.button("Executar Experimento de Hold-out", type="primary"):
-        # Run holdout for Cosine Similarity
-        res_cosine = evaluate_holdout_hit_rate(
+        reps = st.slider("Repetições (média):", 5, 40, 20, step=5)
+
+    if st.button("Executar Precisão de Gênero", type="primary"):
+        # Semente fixa para reprodutibilidade determinística
+        np.random.seed(42)
+        res_cosine = evaluate_genre_precision(
             df=df,
             df_scaled=df_scaled,
             audio_features=audio_features,
             recommender_func=recommend_cosine,
             genre=eval_genre,
             seeds_count=seeds_cnt,
-            holdout_count=holdout_cnt,
             top_n=top_k,
-            same_genre_only=False
+            repetitions=reps,
         )
-        
-        # Run holdout for K-Means (10 clusters)
+
+        np.random.seed(42)
         kmeans_model, cluster_labels = train_kmeans(df_scaled, audio_features, n_clusters=10)
-        res_kmeans = evaluate_holdout_hit_rate(
+        res_kmeans = evaluate_genre_precision(
             df=df,
             df_scaled=df_scaled,
             audio_features=audio_features,
             recommender_func=recommend_kmeans,
             genre=eval_genre,
             seeds_count=seeds_cnt,
-            holdout_count=holdout_cnt,
             top_n=top_k,
-            same_genre_only=False,
-            cluster_labels=cluster_labels
+            repetitions=reps,
+            cluster_labels=cluster_labels,
         )
-        
+
         if "error" in res_cosine:
             st.error(res_cosine["error"])
         else:
+            baseline = res_cosine["baseline"]
             st.markdown("---")
             st.markdown("#### 📈 Resultados Comparativos")
-            
+            st.caption(f"Referência (acaso) = 1/{res_cosine['n_genres']} = {baseline*100:.2f}%  ·  "
+                       f"gênero **{eval_genre}**, {seeds_cnt} sementes, Top-{top_k}, {reps} repetições.")
+
             col_res1, col_res2 = st.columns(2)
             with col_res1:
-                st.metric("Hit Rate — Similaridade do Cosseno", f"{res_cosine['hit_rate']*100:.1f}%", 
-                          help=f"Encontrou {res_cosine['hits']} de {res_cosine['total_holdout']} músicas ocultas.")
-                
+                st.metric(
+                    "Precisão — Similaridade do Cosseno",
+                    f"{res_cosine['precision']*100:.1f}%",
+                    delta=f"{res_cosine['gain']:.1f}× vs. acaso",
+                )
             with col_res2:
-                st.metric("Hit Rate — K-Means Clustering", f"{res_kmeans['hit_rate']*100:.1f}%",
-                          help=f"Encontrou {res_kmeans['hits']} de {res_kmeans['total_holdout']} músicas ocultas.")
-            
-            # Show details
-            st.markdown("##### 🔍 Detalhes do Experimento:")
-            
-            col_det1, col_det2 = st.columns(2)
-            with col_det1:
-                st.write("**🌱 Sementes Utilizadas (Entrada):**")
-                for s in res_cosine["seed_tracks"]:
-                    st.write(f"- {s}")
-                    
-                st.write("")
-                st.write("**🎯 Faixas Ocultas (Gabarito):**")
-                for h in res_cosine["holdout_tracks"]:
-                    st.write(f"- {h}")
-                    
-            with col_det2:
-                st.write("**🏆 Acertos de Similaridade do Cosseno:**")
-                if len(res_cosine["hits_names"]) > 0:
-                    for hit in res_cosine["hits_names"]:
-                        st.write(f"- ✅ **{hit}**")
-                else:
-                    st.write("*Nenhum acerto no Top-K*")
-                    
-                st.write("")
-                st.write("**🏆 Acertos de K-Means:**")
-                if len(res_kmeans["hits_names"]) > 0:
-                    for hit in res_kmeans["hits_names"]:
-                        st.write(f"- ✅ **{hit}**")
-                else:
-                    st.write("*Nenhum acerto no Top-K*")
+                st.metric(
+                    "Precisão — K-Means Clustering",
+                    f"{res_kmeans['precision']*100:.1f}%",
+                    delta=f"{res_kmeans['gain']:.1f}× vs. acaso",
+                )
+
+            st.info(
+                "💡 **Insight:** gêneros acusticamente distintivos (ex.: *classical*) atingem precisão "
+                "muito acima do acaso, enquanto gêneros no meio do espectro (ex.: *jazz*, *metal*) caem "
+                "ao nível do acaso — evidência de que os gêneros finos do dataset se sobrepõem no espaço de áudio. "
+                "Cosseno e K-Means tendem a coincidir, pois o cluster majoritário das sementes é amplo."
+            )
 
 # ----------------- TAB 2: CATALOG COVERAGE -----------------
 with tab_coverage:
@@ -224,7 +209,7 @@ with tab_coverage:
                       help=f"Recomendou {count_km} músicas distintas de {len(df)} totais.")
             st.write(f"Das {len(df):,} músicas do catálogo, **{count_km}** foram sugeridas pelo menos uma vez.")
             
-        st.info("💡 **Insight:** O K-Means tende a restringir as recomendações aos mesmos grupos das sementes, o que pode reduzir a cobertura global em comparação com a similaridade do cosseno aberta, mas foca em perfis estilísticos estritos.")
+        st.info("💡 **Insight:** na escala do catálogo completo, Cosseno e K-Means apresentam cobertura praticamente equivalente. Como o cluster majoritário das sementes é muito grande, reordenar seus candidatos pela mesma similaridade do cosseno reproduz, na prática, a busca aberta. A cobertura baixa em poucas consultas reflete subamostragem (cauda longa), não efeito-bolha: ela cresce quase linearmente com o número de consultas.")
 
 # ----------------- TAB 3: K-MEANS EVALUATION -----------------
 with tab_kmeans:
